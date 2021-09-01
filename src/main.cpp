@@ -125,7 +125,7 @@ uint32_t last_update = 0;
 void loop() {
     wifi_reset_button.tick();
 
-    if (millis() - last_update > 10000) {
+    if (millis() - last_update > 30000) {
         Serial.println("update mdns");
         MDNS.update();
         last_update = millis();
