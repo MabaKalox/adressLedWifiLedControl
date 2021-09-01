@@ -8,6 +8,9 @@
 #include <ESPAsyncWiFiManager.h>
 #include <EncButton.h>
 #include <ESP8266mDNS.h>
+#include <EEPROM.h>
+
+#define COLOR_ARRAY_START_ADDRESS 0
 
 #define PIXEL_QUANTITY 150
 
@@ -21,7 +24,16 @@ AsyncWebServer server(80);
 
 EncButton<EB_CALLBACK, D5> wifi_reset_button;
 
-void setColorArray(std::array<uint32_t, PIXEL_QUANTITY> target) {
+std::array<uint32_t, PIXEL_QUANTITY> read_color_array_from_eeprom() {
+    std::array<uint32_t, PIXEL_QUANTITY> color_array{0};
+    return color_array;
+}
+
+void save_color_array_to_eeprom(std::array<uint32_t, PIXEL_QUANTITY> &target) {
+
+}
+
+void applyColorArray(uint32_t *target) {
     for (uint16_t i = 0; i < PIXEL_QUANTITY; i++) {
         strip.setPixelColor(i, target[i]);
     }
@@ -41,10 +53,8 @@ bool set_up_wifi() {
 
     if (!is_connected) {
         Serial.println("Failed to connect.");
-        // ESP.restart();
     } else {
-        //if you get here you have connected to the WiFi
-        Serial.println("Connected.");
+        Serial.print("Connected. Local IP: ");
         Serial.println(WiFi.localIP());
     }
 
@@ -61,19 +71,21 @@ void set_up_server() {
             String received_data = request->getParam("color_array", true)->value();
             GParser received_data_parsed(received_data.begin(), ',');
             int received_data_parsed_len = received_data_parsed.split();
+            Serial.print("data len: ");
+            Serial.println(received_data_parsed_len);
             if (received_data_parsed_len == PIXEL_QUANTITY) {
-                std::array<uint32_t, PIXEL_QUANTITY> color_array{0};
+                uint32_t color_array[PIXEL_QUANTITY]{0};
                 for (uint16_t i = 0; i < received_data_parsed_len; i++) {
-                    Serial.println(received_data_parsed[i]);
                     color_array[i] = std::stoul(received_data_parsed[i], nullptr, 16);
                 }
-                setColorArray(color_array);
+                applyColorArray(color_array);
                 request->send(200, "text/plain", "APPLIED");
+            } else {
+                request->send(
+                        400, "text/plain",
+                        "ARRAY LENGTH DOES NOT MATCHES LED QUANTITY"
+                );
             }
-            request->send(
-                    200, "text/plain",
-                    "ARRAY LENGTH DOES NOT MATCHES LED QUANTITY"
-            );
         } else {
             request->send(
                     400, "text/plain",
@@ -121,6 +133,7 @@ void setup() {
 }
 
 uint32_t last_update = 0;
+uint32_t last_heap_check_time = 0;
 
 void loop() {
     wifi_reset_button.tick();
@@ -129,5 +142,11 @@ void loop() {
         Serial.println("update mdns");
         MDNS.update();
         last_update = millis();
+    }
+
+    if (millis() - last_heap_check_time > 500) {
+        last_heap_check_time = millis();
+        Serial.print("Free Heap: ");
+        Serial.println(ESP.getFreeHeap());
     }
 }
